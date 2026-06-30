@@ -339,7 +339,7 @@ document.getElementById('fecha').value = `${hoy.getFullYear()}-${String(hoy.getM
 //  Pegá entre las comillas la URL de tu Apps Script (la que termina en /exec).
 //  Mientras esté vacía, la página guarda los datos solo en este navegador.
 // ===========================================================================
-const API_URL = "https://script.google.com/macros/s/AKfycbzVhuxDlxvSK-Gr_cypuV_Aw34CtjA1IEOOMiXmN4K02J6Fk9g9qYDvBq1YHrqHBYlGdw/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbz2uL_Dfr09cfy4OnAkOT59LwRVZmqNmSf1DdUXm0fot7moTfGLWSPSsf_Gg4PU6L7Hqg/exec";
 
 const Backend = {
   usandoServidor(){ return !!API_URL; },
@@ -366,15 +366,10 @@ const Backend = {
 
   async loadRecords(){
     if(API_URL){
-      return await new Promise((resolve, reject)=>{
-        const cb = "cb_" + Date.now() + "_" + Math.floor(Math.random()*1e4);
-        const s = document.createElement("script");
-        const limpiar = ()=>{ try{ delete window[cb]; }catch(e){} if(s.parentNode) s.parentNode.removeChild(s); };
-        window[cb] = (data)=>{ limpiar(); resolve(Array.isArray(data)?data:[]); };
-        s.onerror = ()=>{ limpiar(); reject(new Error("No se pudo leer del servidor")); };
-        s.src = API_URL + "?action=list&callback=" + cb + "&t=" + Date.now();
-        document.body.appendChild(s);
-      });
+      const resp = await fetch(API_URL + "?action=list&t=" + Date.now());
+      if(!resp.ok) throw new Error("No se pudo leer del servidor (HTTP " + resp.status + ")");
+      const data = await resp.json();
+      return Array.isArray(data) ? data : [];
     }
     // Sin servidor: lee de este navegador
     const out = [];
