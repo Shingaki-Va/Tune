@@ -325,9 +325,14 @@ function cargarListas() {
   });
 }
 
+/* Comparador alfabético "natural": trata los números dentro del texto como números,
+   así "iPhone 2" queda antes que "iPhone 10" en vez de después. */
+const collator = new Intl.Collator('es', { numeric: true, sensitivity: 'base' });
+
 /* Arma TIENDAS / PRODUCTOS / PRODUCTO_GRUPO / MODELOS_POR_GRUPO a partir de la respuesta del servidor. */
 function poblarDesde(data) {
   TIENDAS = Array.isArray(data.tiendas) ? data.tiendas.slice() : [];
+  TIENDAS.sort(collator.compare);
 
   PRODUCTOS = {};
   PRODUCTO_GRUPO = {};
@@ -337,6 +342,12 @@ function poblarDesde(data) {
     PRODUCTOS[p.familia].push(p.producto);
     if (p.grupoModelo) PRODUCTO_GRUPO[p.producto] = p.grupoModelo;
   });
+  Object.keys(PRODUCTOS).forEach(fam => PRODUCTOS[fam].sort(collator.compare));
+  // Reordena las familias mismas alfabéticamente (afecta el orden en que se generan los <option>)
+  const familiasOrdenadas = Object.keys(PRODUCTOS).sort(collator.compare);
+  const productosOrdenados = {};
+  familiasOrdenadas.forEach(fam => { productosOrdenados[fam] = PRODUCTOS[fam]; });
+  PRODUCTOS = productosOrdenados;
 
   MODELOS_POR_GRUPO = {};
   (data.modelos || []).forEach(m => {
@@ -344,6 +355,7 @@ function poblarDesde(data) {
     if (!MODELOS_POR_GRUPO[m.grupoModelo]) MODELOS_POR_GRUPO[m.grupoModelo] = [];
     MODELOS_POR_GRUPO[m.grupoModelo].push(m.modelo);
   });
+  Object.keys(MODELOS_POR_GRUPO).forEach(gm => MODELOS_POR_GRUPO[gm].sort(collator.compare));
 }
 
 const FAM_COLOR = {
