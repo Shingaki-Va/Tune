@@ -476,9 +476,20 @@ function toast(msg){
    de marca ("sam", "samsunf"), comparando por distancia de edición contra la lista real.
    Como el contexto ya viene acotado (marca del producto elegido, o familia elegida),
    no hace falta que sea perfecta: alcanza con acercar 1 a 3 opciones para elegir con un clic. */
+/* Abreviaturas cortas muy comunes que la gente usa para marcas conocidas
+   ("Ip 17" por "iPhone 17", "Sam A05" ya lo cubríamos por otro lado, etc.).
+   Se expanden ANTES de comparar, así el detector de errores de tipeo las
+   reconoce como equivalentes en vez de verlas como texto totalmente distinto. */
+const ABREVIATURAS_MARCA = {
+  'IP': 'IPHONE', 'IPH': 'IPHONE', 'IPHO': 'IPHONE', 'IPN': 'IPHONE',
+  'SAM': 'SAMSUNG', 'SS': 'SAMSUNG',
+  'MOT': 'MOTOROLA', 'MOTO': 'MOTOROLA',
+  'XM': 'XIAOMI', 'XIA': 'XIAOMI'
+};
 function tokenizar(str){
   return (str||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-    .toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim().split(/\s+/).filter(Boolean);
+    .toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim().split(/\s+/).filter(Boolean)
+    .map(t => ABREVIATURAS_MARCA[t] || t);
 }
 function distanciaLevenshtein(a, b){
   const m=a.length, n=b.length;
