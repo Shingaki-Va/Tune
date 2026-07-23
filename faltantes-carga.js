@@ -589,6 +589,20 @@ function posibleTypoDe(detalle, candidatos){
   });
   return (mejor && mejorPuntaje >= 0.75) ? mejor : null;
 }
+/* El campo "Marca" (en OTROS y en "otras marcas") es texto libre sin lista contra
+   la cual comparar. Si escriben algo muy parecido a una marca que YA tiene su
+   propio Producto en el desplegable (Apple, Samsung, Motorola, Xiaomi), conviene
+   avisar en vez de dejar que se cree una marca nueva mal escrita (ej. "Iphoen"). */
+const MARCAS_CUBIERTAS_POR_PRODUCTO = ['Apple', 'iPhone', 'Samsung', 'Motorola', 'Xiaomi'];
+function marcaYaCubiertaPor(marca){
+  if(!marca) return null;
+  let mejor = null, mejorPuntaje = 0;
+  MARCAS_CUBIERTAS_POR_PRODUCTO.forEach(m => {
+    const p = puntajeCoincidencia(marca, m);
+    if(p > mejorPuntaje){ mejorPuntaje = p; mejor = m; }
+  });
+  return (mejor && mejorPuntaje >= 0.6) ? mejor : null;
+}
 function evaluarSugerencia(id, tipo){
   const campo = document.getElementById(`modc-${id}`);
   const sugBox = document.getElementById(`modc-sug-${id}`);
@@ -683,6 +697,10 @@ async function enviar(){
         if(!detalle){ ok=false; marcarError(detalleEl); return; }
         if(esTextoSinSentido(detalle)){ ok=false; marcarError(detalleEl); mensajeError = `"${detalle}" no parece un producto válido. Revisalo.`; return; }
         if(marca && esTextoSinSentido(marca)){ ok=false; marcarError(marcaEl); mensajeError = `"${marca}" no parece una marca válida. Revisala.`; return; }
+        if(marca){
+          const marcaCubierta = marcaYaCubiertaPor(marca);
+          if(marcaCubierta){ ok=false; marcarError(marcaEl); mensajeError = `"${marca}" se parece a "${marcaCubierta}", que ya tiene su propio Producto en el desplegable. Elegí esa opción directo en vez de escribir la marca acá.`; return; }
+        }
         if(modeloTxt && esTextoSinSentido(modeloTxt)){ ok=false; marcarError(modeloEl); mensajeError = `"${modeloTxt}" no parece un modelo válido. Revisalo.`; return; }
         if(!cantidadValida(qty)){ ok=false; marcarError(qtyEl); mensajeError = 'La cantidad tiene que ser un número entero de 1 o más.'; return; }
 
@@ -741,6 +759,8 @@ async function enviar(){
         const filasModeloMarca = [...document.querySelectorAll(`#otros-lista-${id} .otro-row`)];
         if(!marca){ ok=false; marcarError(marcaEl); return; }
         if(esTextoSinSentido(marca)){ ok=false; marcarError(marcaEl); mensajeError = `"${marca}" no parece una marca válida. Revisala.`; return; }
+        const marcaCubiertaOM = marcaYaCubiertaPor(marca);
+        if(marcaCubiertaOM){ ok=false; marcarError(marcaEl); mensajeError = `"${marca}" se parece a "${marcaCubiertaOM}", que ya tiene su propio Producto en el desplegable. Elegí esa opción directo en vez de "otras marcas".`; return; }
         if(!filasModeloMarca.length){ ok=false; mensajeError = 'Agregá al menos un modelo de esa marca con "+ Agregar modelo".'; return; }
 
         const productoFinal = prod.replace(/otras marcas/i, marca);
