@@ -16,6 +16,103 @@ function modelosDe(prod) {
 function esOtrasMarcas(prod){
   return /otras marcas/i.test(prod || '');
 }
+
+/* Marcas ya conocidas por el sistema para ofrecer como desplegable en "OTROS":
+   las 4 de siempre (Apple/Samsung/Motorola/Xiaomi) + cualquier marca nueva que se
+   haya ido creando antes por "otras marcas"/"OTROS", reconstruyendo un nombre
+   presentable a partir de la clave de grupo guardada. */
+const GRUPOS_TECNICOS_NO_MARCA = new Set(['TAB_SAMSUNG', 'IPAD', 'PS3', 'PS4', 'PS5']);
+const MARCAS_BASE = [
+  { nombre: 'Apple', grupo: 'APPLE' },
+  { nombre: 'Samsung', grupo: 'SAMSUNG' },
+  { nombre: 'Motorola', grupo: 'MOTOROLA' },
+  { nombre: 'Xiaomi', grupo: 'XIAOMI' }
+];
+function listaMarcasConocidas(){
+  const vistos = new Set(MARCAS_BASE.map(m => m.grupo));
+  const extra = Object.keys(MODELOS_POR_GRUPO)
+    .filter(g => !vistos.has(g) && !GRUPOS_TECNICOS_NO_MARCA.has(g))
+    .map(g => ({ nombre: formatearTitleCase(g.toLowerCase()), grupo: g }));
+  return [...MARCAS_BASE, ...extra].sort((a,b) => collator.compare(a.nombre, b.nombre));
+}
+
+function onMarcaOtrosChange(id){
+  const sel = document.getElementById(`marcaotros-sel-${id}`);
+  const nuevaDiv = document.getElementById(`marcaotros-nueva-${id}`);
+  const modeloArea = document.getElementById(`modelootros-area-${id}`);
+  const valor = sel.value;
+
+  if(!valor){
+    nuevaDiv.style.display = 'none';
+    modeloArea.style.display = 'none';
+    modeloArea.innerHTML = '';
+    return;
+  }
+
+  if(valor === 'OTROS'){
+    nuevaDiv.style.display = 'block';
+    document.getElementById(`marcaotros-${id}`).focus();
+    modeloArea.style.display = 'block';
+    modeloArea.innerHTML = `
+      <label class="fld">Modelo, si corresponde</label>
+      <input type="text" id="modelootros-${id}" maxlength="40" placeholder="Escribí el modelo (opcional)..." onblur="this.value=formatearTitleCase(this.value)">`;
+    return;
+  }
+
+  nuevaDiv.style.display = 'none';
+  const modelos = MODELOS_POR_GRUPO[valor] || [];
+  modeloArea.style.display = 'block';
+  if(modelos.length){
+    modeloArea.innerHTML = `
+      <label class="fld">Modelo, si corresponde</label>
+      <select id="modelootros-sel-${id}" onchange="onModeloOtrosChange(${id})">
+        <option value="">Sin modelo / no corresponde</option>
+        ${modelos.map(m=>`<option value="${m.replace(/"/g,'&quot;')}">${m}</option>`).join('')}
+        <option value="OTROS">OTROS (agregar modelo nuevo)</option>
+      </select>
+      <div id="modelootros-nueva-${id}" style="display:none;margin-top:10px;">
+        <input type="text" id="modelootros-${id}" maxlength="40" placeholder="Escribí el modelo nuevo..." onblur="this.value=formatearTitleCase(this.value)">
+      </div>`;
+  } else {
+    modeloArea.innerHTML = `
+      <label class="fld">Modelo, si corresponde</label>
+      <input type="text" id="modelootros-${id}" maxlength="40" placeholder="Escribí el modelo (opcional)..." onblur="this.value=formatearTitleCase(this.value)">`;
+  }
+}
+function onModeloOtrosChange(id){
+  const sel = document.getElementById(`modelootros-sel-${id}`);
+  const nuevaDiv = document.getElementById(`modelootros-nueva-${id}`);
+  if(sel.value === 'OTROS'){
+    nuevaDiv.style.display = 'block';
+    document.getElementById(`modelootros-${id}`).focus();
+  } else {
+    nuevaDiv.style.display = 'none';
+  }
+}
+
+/* Lee la Marca elegida (existente o recién tipeada) del flujo OTROS al enviar. */
+function leerMarcaOtros(id){
+  const sel = document.getElementById(`marcaotros-sel-${id}`);
+  if(!sel || !sel.value) return { marca: '', grupo: '', esNueva: false };
+  if(sel.value === 'OTROS'){
+    const texto = sanitizarTexto(document.getElementById(`marcaotros-${id}`)?.value);
+    return { marca: texto, grupo: texto ? grupoDesdeMarca(texto) : '', esNueva: true };
+  }
+  const nombre = sel.selectedOptions[0]?.dataset.nombre || sel.value;
+  return { marca: nombre, grupo: sel.value, esNueva: false };
+}
+/* Lee el Modelo elegido (existente, nuevo, o campo libre si la marca no tenía lista). */
+function leerModeloOtros(id){
+  const selModelo = document.getElementById(`modelootros-sel-${id}`);
+  if(selModelo){
+    if(selModelo.value === 'OTROS'){
+      return { modelo: sanitizarTexto(document.getElementById(`modelootros-${id}`)?.value), esNuevo: true };
+    }
+    return { modelo: selModelo.value || '', esNuevo: false };
+  }
+  const campoLibre = document.getElementById(`modelootros-${id}`);
+  return { modelo: campoLibre ? sanitizarTexto(campoLibre.value) : '', esNuevo: true };
+}
 /* Genera una clave de grupoModelo estable a partir de una marca escrita a mano
    (sin tildes, en mayúsculas), para que la próxima vez que alguien escriba la
    misma marca (con otra tipografía o acentos) quede agrupada junto a la anterior. */
@@ -408,6 +505,7 @@ function onProdUnico(id){
   if(prod === 'OTROS'){
     const maxLen = maxLongitud(PRODUCTOS[fam]);
     const etiquetaTipo = fam === 'Vidrios' ? 'Ingrese tipo de vidrio/lámina' : 'Ingrese tipo de funda';
+    const marcas = listaMarcasConocidas();
     detalle.innerHTML = `
       <div class="field">
         <label class="fld">${etiquetaTipo} <span class="req">*</span></label>
@@ -418,13 +516,17 @@ function onProdUnico(id){
         </div>
       </div>
       <div class="field" style="margin-top:14px;">
-        <label class="fld">Ingrese marca, si corresponde</label>
-        <input type="text" id="marcaotros-${id}" maxlength="30" placeholder="Ej: Huawei, Noblex, LG, Alcatel, etc." onblur="this.value=formatearTitleCase(this.value)">
+        <label class="fld">Marca, si corresponde</label>
+        <select id="marcaotros-sel-${id}" onchange="onMarcaOtrosChange(${id})">
+          <option value="">Sin marca / no corresponde</option>
+          ${marcas.map(m=>`<option value="${m.grupo}" data-nombre="${m.nombre.replace(/"/g,'&quot;')}">${m.nombre}</option>`).join('')}
+          <option value="OTROS">OTROS (agregar marca nueva)</option>
+        </select>
+        <div id="marcaotros-nueva-${id}" style="display:none;margin-top:10px;">
+          <input type="text" id="marcaotros-${id}" maxlength="30" placeholder="Escribí la marca nueva..." onblur="this.value=formatearTitleCase(this.value)">
+        </div>
       </div>
-      <div class="field" style="margin-top:14px;">
-        <label class="fld">Ingrese modelo, si corresponde</label>
-        <input type="text" id="modelootros-${id}" maxlength="40" placeholder="Escribí el modelo (opcional)..." onblur="this.value=formatearTitleCase(this.value)">
-      </div>
+      <div id="modelootros-area-${id}" style="display:none;margin-top:14px;"></div>
       <div class="field" style="margin-top:14px;">
         <label class="fld">Cantidad estimada perdida <span class="req">*</span></label>
         <input type="number" id="qty-${id}" min="1" step="1" inputmode="numeric" placeholder="0">
@@ -670,6 +772,7 @@ async function enviar(){
   if(!items.length){ toast('Agregá al menos un faltante.'); return; }
 
   const registros = []; let ok = true; let algoMarcado = false; let mensajeError = null;
+  const avisosMarca = []; // marcas escritas que se parecen a Apple/Samsung/Motorola/Xiaomi
   const nuevosProductos = []; // { familia, producto } escritos como "otro" (producto)
   const nuevosModelos = [];   // { grupoModelo, modelo } escritos como "otro" (modelo)
 
@@ -686,25 +789,23 @@ async function enviar(){
 
       if(prod === 'OTROS'){
         const detalleEl = document.getElementById(`modc-${id}`);
-        const marcaEl = document.getElementById(`marcaotros-${id}`);
-        const modeloEl = document.getElementById(`modelootros-${id}`);
         const qtyEl = document.getElementById(`qty-${id}`);
         const detalle = sanitizarTexto(detalleEl?.value);
-        const marca = sanitizarTexto(marcaEl?.value);
-        const modeloTxt = sanitizarTexto(modeloEl?.value);
         const qty = qtyEl?.value;
+
+        const { marca, grupo, esNueva: marcaEsNueva } = leerMarcaOtros(id);
+        const { modelo: modeloTxt, esNuevo: modeloEsNuevo } = leerModeloOtros(id);
 
         if(!detalle){ ok=false; marcarError(detalleEl); return; }
         if(esTextoSinSentido(detalle)){ ok=false; marcarError(detalleEl); mensajeError = `"${detalle}" no parece un producto válido. Revisalo.`; return; }
-        if(marca && esTextoSinSentido(marca)){ ok=false; marcarError(marcaEl); mensajeError = `"${marca}" no parece una marca válida. Revisala.`; return; }
-        if(marca){
+        if(marcaEsNueva && marca && esTextoSinSentido(marca)){ ok=false; mensajeError = `"${marca}" no parece una marca válida. Revisala.`; return; }
+        if(marcaEsNueva && marca){
           const marcaCubierta = marcaYaCubiertaPor(marca);
-          if(marcaCubierta){ ok=false; marcarError(marcaEl); mensajeError = `"${marca}" se parece a "${marcaCubierta}", que ya tiene su propio Producto en el desplegable. Elegí esa opción directo en vez de escribir la marca acá.`; return; }
+          if(marcaCubierta) avisosMarca.push(`"${marca}" (¿quisiste decir "${marcaCubierta}"?)`);
         }
-        if(modeloTxt && esTextoSinSentido(modeloTxt)){ ok=false; marcarError(modeloEl); mensajeError = `"${modeloTxt}" no parece un modelo válido. Revisalo.`; return; }
+        if(modeloTxt && esTextoSinSentido(modeloTxt)){ ok=false; mensajeError = `"${modeloTxt}" no parece un modelo válido. Revisalo.`; return; }
         if(!cantidadValida(qty)){ ok=false; marcarError(qtyEl); mensajeError = 'La cantidad tiene que ser un número entero de 1 o más.'; return; }
 
-        const grupo = marca ? grupoDesdeMarca(marca) : '';
         const productoFinal = marca ? `${detalle} ${marca}` : detalle;
 
         registros.push({ fecha, tienda, familia: fam, producto: productoFinal, modelo: modeloTxt, cantidad: parseInt(qty,10) });
@@ -712,7 +813,7 @@ async function enviar(){
         if(!PRODUCTOS[fam]) PRODUCTOS[fam] = [];
         if(!PRODUCTOS[fam].includes(productoFinal)){ PRODUCTOS[fam].push(productoFinal); PRODUCTOS[fam].sort(collator.compare); }
         if(marca) PRODUCTO_GRUPO[productoFinal] = grupo;
-        if(marca && modeloTxt){
+        if(marca && modeloTxt && modeloEsNuevo){
           nuevosModelos.push({ grupoModelo: grupo, modelo: modeloTxt });
           if(!MODELOS_POR_GRUPO[grupo]) MODELOS_POR_GRUPO[grupo] = [];
           if(!MODELOS_POR_GRUPO[grupo].includes(modeloTxt)){ MODELOS_POR_GRUPO[grupo].push(modeloTxt); MODELOS_POR_GRUPO[grupo].sort((a,b) => collator.compare(b,a)); }
@@ -760,7 +861,7 @@ async function enviar(){
         if(!marca){ ok=false; marcarError(marcaEl); return; }
         if(esTextoSinSentido(marca)){ ok=false; marcarError(marcaEl); mensajeError = `"${marca}" no parece una marca válida. Revisala.`; return; }
         const marcaCubiertaOM = marcaYaCubiertaPor(marca);
-        if(marcaCubiertaOM){ ok=false; marcarError(marcaEl); mensajeError = `"${marca}" se parece a "${marcaCubiertaOM}", que ya tiene su propio Producto en el desplegable. Elegí esa opción directo en vez de "otras marcas".`; return; }
+        if(marcaCubiertaOM) avisosMarca.push(`"${marca}" (¿quisiste decir "${marcaCubiertaOM}"?)`);
         if(!filasModeloMarca.length){ ok=false; mensajeError = 'Agregá al menos un modelo de esa marca con "+ Agregar modelo".'; return; }
 
         const productoFinal = prod.replace(/otras marcas/i, marca);
@@ -834,6 +935,13 @@ async function enviar(){
   const cantidadAlta = registros.find(r => r.cantidad > 50);
   if(cantidadAlta){
     const seguir = confirm(`"${cantidadAlta.producto}${cantidadAlta.modelo?' ('+cantidadAlta.modelo+')':''}" tiene una cantidad de ${cantidadAlta.cantidad}. ¿Confirmás que es correcta?`);
+    if(!seguir) return;
+  }
+
+  // Aviso (no bloquea) si alguna marca escrita se parece a Apple/Samsung/Motorola/Xiaomi,
+  // que ya tienen su propio Producto en el desplegable.
+  if(avisosMarca.length){
+    const seguir = confirm(`Ojo con esto:\n${avisosMarca.join('\n')}\nSi tu producto ya tiene una opción propia en el desplegable para esa marca, te conviene elegirla ahí en vez de "OTROS"/"otras marcas". ¿Confirmás que igual querés cargarlo así?`);
     if(!seguir) return;
   }
 
