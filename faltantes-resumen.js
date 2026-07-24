@@ -1,6 +1,6 @@
 /* LOGICA DE RESUMEN */
 let DATA = [];
-let sortBy = 'cantidad', sortDir = 'desc';
+let sortBy = 'fecha', sortDir = 'desc';
 let activeTab = 'detalle';
 let filtros = { tienda:'', familia:'', desde:'', hasta:'' };
 
@@ -116,7 +116,13 @@ function cmp(a,b){
   let va=a[sortBy], vb=b[sortBy];
   if(sortBy==='cantidad'){ va=va||0; vb=vb||0; return sortDir==='desc'? vb-va : va-vb; }
   va=(va||'').toString().toLowerCase(); vb=(vb||'').toString().toLowerCase();
-  return sortDir==='desc'? vb.localeCompare(va) : va.localeCompare(vb);
+  const primario = sortDir==='desc'? vb.localeCompare(va) : va.localeCompare(vb);
+  if(primario !== 0) return primario;
+  // Empate en la misma fecha: desempata por tienda, siempre A-Z para que sea predecible.
+  if(sortBy==='fecha'){
+    return (a.tienda||'').toString().toLowerCase().localeCompare((b.tienda||'').toString().toLowerCase());
+  }
+  return 0;
 }
 function sortCol(key){ if(sortBy===key) sortDir = sortDir==='desc'?'asc':'desc'; else { sortBy=key; sortDir = key==='cantidad'?'desc':'asc'; } render(); }
 function toggleDir(){ sortDir = sortDir==='desc'?'asc':'desc'; render(); }
