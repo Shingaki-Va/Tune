@@ -252,6 +252,35 @@ function cargarListas() {
   });
 }
 
+/* Reintenta cargarListas() unas veces más antes de rendirse del todo. Cubre fallas
+   transitorias (una petición JSONP que falló una vez por lentitud de red o de Apps
+   Script) sin llegar a mostrar la pantalla de error al usuario. */
+function cargarListasConReintento(intentos, esperaMs){
+  intentos = intentos || 3;
+  esperaMs = esperaMs || 1200;
+  return cargarListas().catch(err => {
+    if(intentos > 1){
+      return new Promise(res => setTimeout(res, esperaMs))
+        .then(() => cargarListasConReintento(intentos - 1, esperaMs));
+    }
+    throw err;
+  });
+}
+
+/* Cache local de la última respuesta exitosa de "listas", para poder seguir
+   trabajando (con datos algo desactualizados) si el servidor no responde en el
+   momento — en vez de bloquear la carga del formulario por completo. */
+const CACHE_LISTAS_KEY = 'tune_listas_cache';
+function guardarCacheListas(data){
+  try { localStorage.setItem(CACHE_LISTAS_KEY, JSON.stringify({ data, t: Date.now() })); } catch(e){}
+}
+function leerCacheListas(){
+  try {
+    const raw = localStorage.getItem(CACHE_LISTAS_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e){ return null; }
+}
+
 /* Comparador alfabético "natural": trata los números dentro del texto como números,
    así "iPhone 2" queda antes que "iPhone 10" en vez de después. */
 const collator = new Intl.Collator('es', { numeric: true, sensitivity: 'base' });
@@ -1034,19 +1063,36 @@ function poblarSelectTiendas() {
   selT.addEventListener('change', () => { if(selT.value) recordarTienda(selT.value); });
 }
 
+/* Muestra el formulario ya poblado con las listas (data) y opcionalmente un
+   mensaje (por ejemplo, avisando que se está usando una copia guardada). */
+function mostrarFormularioConListas(data, mensajeAviso){
+  poblarDesde(data);
+  poblarSelectTiendas();
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  addItem();
+  actualizarEstadoBoton();
+  if(mensajeAviso) toast(mensajeAviso);
+}
+
 async function iniciarCarga() {
   try {
-    const data = await cargarListas();
-    poblarDesde(data);
-    poblarSelectTiendas();
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    addItem();
-    actualizarEstadoBoton();
+    const data = await cargarListasConReintento(3);
+    guardarCacheListas(data);
+    mostrarFormularioConListas(data);
   } catch (err) {
     console.error(err);
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('load-error').style.display = 'block';
+    // Si falló incluso después de reintentar, usamos la última copia guardada
+    // localmente (si existe) para no dejar a la persona sin poder cargar nada.
+    const cache = leerCacheListas();
+    if (cache && cache.data) {
+      const horas = Math.max(0, Math.round((Date.now() - cache.t) / 3600000));
+      const antiguedad = horas > 0 ? `hace ${horas}h` : 'hace menos de 1h';
+      mostrarFormularioConListas(cache.data, `No se pudo conectar al servidor. Usando listas guardadas ${antiguedad}.`);
+    } else {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('load-error').style.display = 'block';
+    }
   }
 }
 
@@ -1084,4 +1130,3 @@ window.addEventListener('beforeunload', function(e){
 });
 
 iniciarCarga();
-
