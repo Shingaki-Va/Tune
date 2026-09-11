@@ -7,10 +7,16 @@ const FAM_COLOR = {
 
 // ===========================================================================
 //  CONFIGURACIÓN DEL SERVIDOR
-//  Pegá entre las comillas la URL de tu Apps Script (la que termina en /exec).
+//  Pegá entre las comillas la URL de tu Apps Script (la que termina en /exec),
+//  o la URL de tu proxy (Cloudflare Worker) si lo estás usando.
 //  Mientras esté vacía, la página guarda los datos solo en este navegador.
+//
+//  URL directa de Apps Script (queda comentada como referencia; algunas
+//  extensiones de navegador bloquean pedidos a script.google.com, por eso
+//  se agregó el proxy de abajo):
+//  https://script.google.com/macros/s/AKfycbzVhuxDlxvSK-Gr_cypuV_Aw34CtjA1IEOOMiXmN4K02J6Fk9g9qYDvBq1YHrqHBYlGdw/exec
 // ===========================================================================
-const API_URL = "https://script.google.com/macros/s/AKfycbzVhuxDlxvSK-Gr_cypuV_Aw34CtjA1IEOOMiXmN4K02J6Fk9g9qYDvBq1YHrqHBYlGdw/exec";
+const API_URL = "https://tune-proxy.vshingaki-tyl.workers.dev";
 
 const Backend = {
   usandoServidor(){ return !!API_URL; },
